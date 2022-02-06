@@ -1,0 +1,23 @@
+server:
+  http:
+    listen_addr: ":9090"
+    # allow only traefik
+    allowed_networks:
+      - "172.16.0.0/12"
+    read_timeout: 10m
+    write_timeout: 10m
+    idle_timeout: 20m
+
+users:
+  - name: "admin-ro"
+    password: "aaaa"
+    to_cluster: "default"
+    to_user: "admin-ro"
+    allow_cors: true
+
+clusters:
+  - name: "default"
+    nodes: ["clickhouse:8123"]
+    users:
+      - name: "admin-ro"
+        password: "aaa"

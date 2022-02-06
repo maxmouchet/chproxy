@@ -16,6 +16,7 @@ import (
 
 	"github.com/Vertamedia/chproxy/config"
 	"github.com/Vertamedia/chproxy/log"
+	"github.com/fsnotify/fsnotify"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -67,6 +68,41 @@ func main() {
 			}
 		}
 	}()
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatalf("error while creating config watcher: %s", err)
+	}
+	defer watcher.Close()
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				log.Infof("watcher event: %s", event)
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					log.Infof("modified file: %s", event.Name)
+					log.Infof("going to reload config %s ...", *configFile)
+					if err := reloadConfig(); err != nil {
+						log.Errorf("error while reloading config: %s", err)
+						continue
+					}
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Infof("watcher error: %s", err)
+			}
+		}
+	}()
+
+	err = watcher.Add(*configFile)
+	if err != nil {
+		log.Fatalf("error while adding config to watcher: %s", err)
+	}
 
 	server := cfg.Server
 	if len(server.HTTP.ListenAddr) == 0 && len(server.HTTPS.ListenAddr) == 0 {
